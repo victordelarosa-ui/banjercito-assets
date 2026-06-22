@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banjercito – Demo Chatbot Multicanal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #fff;
+    color: #333;
+  }
+
+  /* ── HEADER GOB.MX ── */
+  .gob-bar {
+    background: #6a0f35;
+    height: 8px;
+    width: 100%;
+  }
+  .site-header {
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .site-header img { height: 40px; }
+  .site-header-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #015951;
+    letter-spacing: -0.5px;
+  }
+
+  /* ── HERO BANNER ── */
+  .hero {
+    background: #015951;
+    padding: 48px 5% 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    min-height: 240px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-text { max-width: 580px; }
+  .hero-text h1 {
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+  .hero-text h2 {
+    font-size: clamp(20px, 3vw, 34px);
+    font-weight: 700;
+    color: #c8a84b;
+    margin-bottom: 20px;
+  }
+  .hero-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #1a8a6e;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    margin-bottom: 12px;
+  }
+  .hero-sub {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  .hero-phone {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+  }
+  .hero-phone svg { width: 100%; max-width: 220px; }
+
+  /* ── CONTENT ── */
+  .content { padding: 32px 5%; }
+  .content h3 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #222;
+    margin-bottom: 6px;
+  }
+  .content-underline {
+    width: 48px;
+    height: 4px;
+    background: #6a0f35;
+    border-radius: 2px;
+    margin-bottom: 24px;
+  }
+  .placeholder-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .placeholder-card {
+    background: #f5f5f5;
+    border-radius: 10px;
+    height: 130px;
+    animation: pulse 2s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ══════════════════════════════════════════
+     WIDGET DE CANALES – ABANICO RADIAL
+  ══════════════════════════════════════════ */
+
+  /*
+    Estrategia de layout:
+    - .fabs es el contenedor fijo en la esquina inferior-derecha.
+    - #mainFab (150×150) siempre queda en bottom:0 right:0 dentro de .fabs.
+    - .fan-options se ancla al BORDE SUPERIOR del botón (bottom: 150px)
+      y al borde derecho (right: 0), así el origen de coordenadas de los
+      satélites arranca justo ENCIMA del botón, nunca encima de él.
+    - Cada satélite usa --tx (negativo = izquierda) y --ty (negativo = arriba)
+      desde ese origen para desplegarse sin chocar con el botón.
+  */
+
+  .fabs {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    width: 150px;      /* mismo ancho que el botón */
+    height: 150px;     /* mismo alto que el botón  */
+  }
+
+  #mainFab {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    cursor: pointer;
+    display: block;
+    transition: filter 0.2s;
+    z-index: 2;
+  }
+  #mainFab:hover { filter: brightness(1.08); }
+
+  /*
+    Origen del abanico: esquina superior-derecha del botón.
+    right: 0  → alineado al borde derecho del .fabs
+    bottom: 150px → justo encima del botón
+  */
+  .fan-options {
+    position: absolute;
+    bottom: 150px;
+    right: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* Cada satélite parte del origen (0,0) = esquina sup-der del botón */
+  .fan-item {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    /* cerrado: en el origen, encogido */
+    transform: translate(0, 0) scale(0.3);
+    transition: opacity 0.28s ease, transform 0.30s cubic-bezier(0.34,1.45,0.64,1);
+    pointer-events: none;
+  }
+  .fan-item.visible {
+    opacity: 1;
+    /* abierto: vuela a la posición radial y se centra sobre ella */
+    transform: translate(calc(var(--tx) - 50%), calc(var(--ty) - 50%)) scale(1);
+    pointer-events: auto;
+  }
+  .fan-item:nth-child(1) { transition-delay: 0.05s; }
+  .fan-item:nth-child(2) { transition-delay: 0.12s; }
+  .fan-item:nth-child(3) { transition-delay: 0.19s; }
+
+  /* Etiqueta de texto del canal */
+  .fan-label {
+    background: #fff;
+    color: #333;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    white-space: nowrap;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: transform 0.15s;
+    order: 2; /* etiqueta debajo del icono */
+  }
+  .fan-label:hover { transform: scale(1.05); }
+
+  /* Icono circular del canal */
+  .fan-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.22);
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+    order: 1; /* icono arriba de la etiqueta */
+  }
+  .fan-icon:hover { transform: scale(1.12); }
+  .fan-icon.wsp   { background: #25D366; }
+  .fan-icon.apple { background: #000; }
+  .fan-icon.web   { background: #015951; }
+
+  /* Backdrop para cerrar al hacer clic fuera */
+  .fab-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+  }
+  .fab-backdrop.active { display: block; }
+
+  /* Badge de canal activo */
+  .active-indicator {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- Barra GOB.MX -->
+<div class="gob-bar"></div>
+
+<!-- Header -->
+<header class="site-header">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <!-- Logo Banjercito simplificado -->
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="44" height="44" rx="8" fill="#015951"/>
+      <text x="22" y="28" text-anchor="middle" fill="#fff" font-size="11" font-weight="800" font-family="Arial">BANJE</text>
+    </svg>
+    <div>
+      <div class="site-header-title">Banjercito</div>
+      <div style="font-size:11px;color:#666;">Banco Nacional del Ejército, Fuerza Aérea y Armada</div>
+    </div>
+  </div>
+</header>
+
+<!-- Hero Banner -->
+<section class="hero">
+  <div class="hero-text">
+    <h1>Registra tu línea celular</h1>
+    <h2>Tienes hasta el 30 de junio</h2>
+    <a href="#" class="hero-cta">
+      <svg width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Ingresa al portal de tu compañía
+    </a>
+    <p class="hero-sub">Es por la seguridad de todas y todos</p>
+  </div>
+  <div class="hero-phone">
+    <svg viewBox="0 0 200 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="20" y="10" width="160" height="280" rx="22" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+      <rect x="30" y="30" width="140" height="240" rx="12" fill="rgba(255,255,255,0.06)"/>
+      <rect x="45" y="90" width="110" height="80" rx="8" fill="rgba(255,255,255,0.12)"/>
+      <text x="100" y="135" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="11" font-family="Arial">📱 Biometría</text>
+      <circle cx="100" cy="275" r="10" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    </svg>
+  </div>
+</section>
+
+<!-- Contenido de relleno -->
+<section class="content">
+  <h3>Blog</h3>
+  <div class="content-underline"></div>
+  <div class="placeholder-cards">
+    <div class="placeholder-card"></div>
+    <div class="placeholder-card"></div>
+    <div class="placeholder-card"></div>
+    <div class="placeholder-card"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     WIDGET MULTICANAL – SECTION id="14010"
+══════════════════════════════════════════ -->
+<section id="14010">
+
+  <!-- Backdrop para cerrar al hacer clic fuera -->
+  <div class="fab-backdrop" id="fabBackdrop"></div>
+
+  <!-- Abanico de canales -->
+  <div class="fabs">
+
+    <!-- Botón principal (siempre en la esquina, no se mueve) -->
+    <img src="https://www.gob.mx/cms/uploads/image/file/831697/banjercito-chat.png"
+         id="mainFab"
+         onclick="toggleFan()"
+         aria-label="Opciones de contacto"
+         aria-expanded="false"
+         height="150"
+         width="150"
+         alt="Chatbot Banjercito" />
+
+    <!-- Satélites: se posicionan alrededor del centro del botón -->
+    <div class="fan-options" id="fanOptions">
+
+      <!-- WhatsApp (siempre visible) -->
+      <div class="fan-item" id="fanWsp">
+        <button class="fan-icon wsp" onclick="selectChannel('wsp')" aria-label="Abrir WhatsApp" style="background-image:url('https://raw.githubusercontent.com/victordelarosa-ui/banjercito-assets/refs/heads/main/WHATSAPP_BANJE.png');background-size:cover;background-position:center;padding:0;border:none;"></button>
+        <button class="fan-label" onclick="selectChannel('wsp')">WhatsApp</button>
+      </div>
+
+      <!-- Apple Messages (solo si es dispositivo Apple) -->
+      <div class="fan-item" id="fanApple" style="display:none;">
+        <button class="fan-icon apple" onclick="selectChannel('apple')" aria-label="Abrir Apple Messages" style="background-image:url('https://raw.githubusercontent.com/victordelarosa-ui/banjercito-assets/refs/heads/main/BANJE_APPLE.png');background-size:cover;background-position:center;padding:0;border:none;"></button>
+        <button class="fan-label" onclick="selectChannel('apple')">Apple Messages</button>
+      </div>
+
+      <!-- Webchat (siempre visible) -->
+      <div class="fan-item" id="fanWeb">
+        <button class="fan-icon web" onclick="selectChannel('web')" aria-label="Abrir Webchat" style="background-image:url('https://raw.githubusercontent.com/victordelarosa-ui/banjercito-assets/refs/heads/main/WEBCHAT_BANJE.png');background-size:cover;background-position:center;padding:0;border:none;"></button>
+        <button class="fan-label" onclick="selectChannel('web')">Webchat</button>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+
+<script>
+  /* ──────────────────────────────────────────
+     DETECCIÓN DE DISPOSITIVO APPLE
+  ────────────────────────────────────────── */
+  function isAppleDevice() {
+    var ua       = navigator.userAgent || '';
+    var platform = navigator.platform  || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua)) return true;
+    if (/Mac/i.test(platform)) return true;
+    return false;
+  }
+
+  var hasApple = isAppleDevice();
+  if (hasApple) {
+    var fanApple = document.getElementById('fanApple');
+    if (fanApple) fanApple.style.display = 'flex';
+  }
+
+  /* ──────────────────────────────────────────
+     URLs DE DEMO
+  ────────────────────────────────────────── */
+  var WSP_URL   = 'https://wa.me/message/VXNPGSMMETZCH1';
+  var APPLE_URL = 'https://bcrw.apple.com/urn:biz:5b694b49-5efa-46a9-8c7c-4cba1a47e849';
+  var WEB_URL   = 'https://www.conceptomovil.com/webchat/index4.html';
+
+  /* ──────────────────────────────────────────
+     POSICIONAMIENTO RADIAL — viewport-safe
+     Origen = esquina superior-derecha del botón.
+     --tx: negativo → izquierda
+     --ty: negativo → arriba  (positivo → abajo, evitar)
+
+     Con 2 canales (sin Apple): WhatsApp arriba-izq, Webchat izquierda
+     Con 3 canales (con Apple): WhatsApp arriba, Apple arriba-izq, Webchat izquierda
+  ────────────────────────────────────────── */
+  function applyRadialPositions() {
+    var allItems = document.querySelectorAll('#fanOptions .fan-item');
+    var visibleItems = [];
+    allItems.forEach(function(item) {
+      if (item.style.display !== 'none') visibleItems.push(item);
+    });
+
+    /*
+      Posiciones fijas en px desde el origen (esquina sup-der del botón).
+      tx negativo = izquierda, ty negativo = arriba.
+      Distancia mínima al borde del botón: ~90px (radio botón 75px + margen 15px).
+      Se incluye el ícono (~25px) y la etiqueta (~20px) en el cálculo.
+    */
+    var positions2 = [
+      { tx: -110, ty: -130 },  // WhatsApp: arriba-izquierda
+      { tx: -190, ty:  -60 },  // Webchat: izquierda
+    ];
+    var positions3 = [
+      { tx:  -55, ty: -150 },  // WhatsApp: arriba
+      { tx: -155, ty: -130 },  // Apple:    arriba-izquierda
+      { tx: -210, ty:  -45 },  // Webchat:  izquierda
+    ];
+
+    var positions = visibleItems.length >= 3 ? positions3 : positions2;
+
+    visibleItems.forEach(function(item, i) {
+      var pos = positions[i] || positions[positions.length - 1];
+      item.style.setProperty('--tx', pos.tx + 'px');
+      item.style.setProperty('--ty', pos.ty + 'px');
+    });
+  }
+
+  setTimeout(applyRadialPositions, 0);
+
+  /* ──────────────────────────────────────────
+     ESTADO DEL ABANICO
+  ────────────────────────────────────────── */
+  var fanOpen    = false;
+  var mainFab    = document.getElementById('mainFab');
+  var fanOptions = document.getElementById('fanOptions');
+  var backdrop   = document.getElementById('fabBackdrop');
+
+  function toggleFan() {
+    fanOpen = !fanOpen;
+    mainFab.setAttribute('aria-expanded', fanOpen);
+    backdrop.classList.toggle('active', fanOpen);
+
+    fanOptions.querySelectorAll('.fan-item').forEach(function(item) {
+      if (item.style.display === 'none') return;
+      item.classList.toggle('visible', fanOpen);
+    });
+  }
+
+  function closeFan() {
+    if (!fanOpen) return;
+    fanOpen = false;
+    mainFab.setAttribute('aria-expanded', false);
+    backdrop.classList.remove('active');
+    fanOptions.querySelectorAll('.fan-item').forEach(function(i) {
+      i.classList.remove('visible');
+    });
+  }
+
+  backdrop.addEventListener('click', closeFan);
+
+  /* ──────────────────────────────────────────
+     SELECCIÓN DE CANAL
+  ────────────────────────────────────────── */
+  function selectChannel(key) {
+    closeFan();
+    if (key === 'wsp') {
+      window.open(WSP_URL, '_blank');
+    } else if (key === 'apple') {
+      window.open(APPLE_URL, '_blank');
+    } else if (key === 'web') {
+      popupCenter(WEB_URL, 'Banje-Bot', 420, 740);
+    }
+  }
+
+  /* ──────────────────────────────────────────
+     POPUP CENTRADO
+  ────────────────────────────────────────── */
+  function popupCenter(url, title, w, h) {
+    var dualLeft = window.screenLeft !== undefined ? window.screenLeft : screen.left;
+    var dualTop  = window.screenTop  !== undefined ? window.screenTop  : screen.top;
+    var width    = window.innerWidth  || document.documentElement.clientWidth  || screen.width;
+    var height   = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    var left     = ((width  / 2) - (w / 2)) + dualLeft;
+    var top      = ((height / 2) - (h / 2)) + dualTop;
+    var win      = window.open(url, title,
+                    'scrollbars=yes,width=' + w + ',height=' + h +
+                    ',top=' + top + ',left=' + left);
+    if (win && win.focus) win.focus();
+  }
+</script>
+
+</section>
+
+</body>
+</html>
